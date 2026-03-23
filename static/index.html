@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Soniq — YouTube Audio Extractor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Tokens ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:      #0f0e17;
+  --paper:    #faf9f6;
+  --cream:    #f2efe8;
+  --warm:     #e8e3d9;
+  --stroke:   #d8d2c5;
+  --muted:    #9d9688;
+  --accent:   #e05c2a;
+  --accent2:  #2a7de0;
+  --green:    #27a85f;
+  --radius:   14px;
+  --shadow:   0 2px 16px rgba(15,14,23,.08), 0 1px 4px rgba(15,14,23,.06);
+  --shadow-lg:0 8px 40px rgba(15,14,23,.12), 0 2px 8px rgba(15,14,23,.08);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Grain overlay ──────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.5;
+}
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.wrap { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* ── Nav ────────────────────────────────────────────────────── */
+nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 28px 0 36px;
+}
+.brand {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px; letter-spacing: -0.03em; color: var(--ink);
+}
+.brand em { font-style: italic; color: var(--accent); }
+.badge {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  background: var(--ink); color: var(--paper);
+  border-radius: 20px; padding: 4px 12px; letter-spacing: 0.08em;
+}
+
+/* ── Hero text ──────────────────────────────────────────────── */
+.hero { margin-bottom: 36px; }
+.hero h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(32px, 6vw, 52px);
+  line-height: 1.1; letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+.hero h1 em { font-style: italic; color: var(--accent); }
+.hero p {
+  font-size: 15px; color: var(--muted); font-weight: 300; line-height: 1.7;
+  max-width: 480px;
+}
+
+/* ── Card base ──────────────────────────────────────────────── */
+.card {
+  background: white;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ── Input card ─────────────────────────────────────────────── */
+.input-card { padding: 24px; margin-bottom: 20px; }
+
+.input-label {
+  font-size: 11px; font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+
+.url-row { display: flex; gap: 10px; margin-bottom: 16px; }
+
+.url-input {
+  flex: 1; border: 1.5px solid var(--stroke); border-radius: 10px;
+  padding: 13px 16px; font-family: 'DM Mono', monospace;
+  font-size: 12.5px; color: var(--ink);
+  background: var(--cream); outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.url-input:focus { border-color: var(--accent); background: white; }
+.url-input::placeholder { color: var(--muted); }
+
+.extract-btn {
+  background: var(--ink); color: var(--paper);
+  border: none; border-radius: 10px;
+  padding: 13px 22px; font-family: 'Outfit', sans-serif;
+  font-weight: 600; font-size: 14px; cursor: pointer;
+  transition: background 0.18s, transform 0.12s;
+  white-space: nowrap; flex-shrink: 0;
+}
+.extract-btn:hover { background: var(--accent); }
+.extract-btn:active { transform: scale(0.97); }
+.extract-btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+/* Format pills */
+.format-row { display: flex; gap: 8px; align-items: center; }
+.format-label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+.fmt-pill {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  padding: 5px 14px; border-radius: 20px;
+  border: 1.5px solid var(--stroke); background: transparent;
+  color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.fmt-pill:hover { border-color: var(--ink); color: var(--ink); }
+.fmt-pill.active {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+}
+
+/* ── Error ──────────────────────────────────────────────────── */
+.error-bar {
+  display: none; align-items: flex-start; gap: 10px;
+  background: #fff5f5; border: 1.5px solid #ffcdd2;
+  border-radius: 10px; padding: 12px 16px;
+  font-size: 13px; color: #c0392b; margin-top: 14px; line-height: 1.5;
+}
+.error-bar.show { display: flex; }
+.error-icon { flex-shrink: 0; margin-top: 1px; }
+
+/* ── Progress card ──────────────────────────────────────────── */
+.progress-card {
+  display: none; padding: 22px 24px; margin-bottom: 20px;
+  align-items: center; gap: 16px;
+}
+.progress-card.show { display: flex; }
+
+.spinner {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 3px solid var(--warm);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.progress-info { flex: 1; }
+.progress-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.progress-sub { font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; }
+.progress-bar-track {
+  height: 4px; background: var(--warm); border-radius: 4px;
+  margin-top: 10px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent));
+  border-radius: 4px; transition: width 0.4s ease;
+  animation: shimmer 1.5s ease infinite;
+  background-size: 200% 100%;
+}
+@keyframes shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ── Player card ────────────────────────────────────────────── */
+.player-card {
+  display: none; flex-direction: column;
+  overflow: hidden; margin-bottom: 20px;
+}
+.player-card.show { display: flex; animation: fadeUp 0.4s ease forwards; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Thumbnail strip */
+.thumb-strip {
+  position: relative; height: 200px; overflow: hidden;
+  background: var(--cream);
+}
+.thumb-img {
+  width: 100%; height: 100%; object-fit: cover;
+  filter: saturate(0.7) brightness(0.85);
+  transition: filter 0.4s;
+}
+.thumb-img.loaded { filter: saturate(0.9) brightness(0.8); }
+.thumb-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(175deg, transparent 30%, rgba(0,0,0,0.7) 100%);
+}
+.thumb-meta {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 16px 20px;
+}
+.track-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px; color: white; line-height: 1.25;
+  margin-bottom: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.track-channel {
+  font-size: 12px; color: rgba(255,255,255,0.65);
+  font-family: 'DM Mono', monospace;
+}
+
+/* Waveform */
+.waveform-wrap { padding: 14px 20px 0; background: white; }
+#waveCanvas { width: 100%; height: 52px; display: block; cursor: pointer; }
+
+/* Seek + time */
+.seek-wrap { padding: 8px 20px 0; background: white; }
+.seek-track {
+  position: relative; height: 5px; background: var(--warm);
+  border-radius: 5px; cursor: pointer;
+}
+.seek-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent2) 0%, var(--accent) 100%);
+  border-radius: 5px; width: 0%; pointer-events: none;
+  transition: width 0.25s linear;
+}
+.seek-knob {
+  position: absolute; top: 50%; left: 0%;
+  transform: translate(-50%, -50%);
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px rgba(224,92,42,.2);
+  cursor: pointer; transition: left 0.25s linear;
+}
+.time-row {
+  display: flex; justify-content: space-between;
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--muted); margin-top: 5px;
+}
+
+/* Controls */
+.controls {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 18px 20px 8px; background: white;
+}
+
+.ctrl {
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--stroke); border-radius: 50%;
+  background: white; cursor: pointer; color: var(--ink);
+  transition: all 0.15s;
+}
+.ctrl:hover { border-color: var(--ink); background: var(--cream); }
+.ctrl:active { transform: scale(0.93); }
+
+.ctrl.xs { width: 36px; height: 36px; }
+.ctrl.sm { width: 44px; height: 44px; }
+.ctrl.lg {
+  width: 60px; height: 60px;
+  background: var(--accent); border-color: var(--accent); color: white;
+  box-shadow: 0 4px 20px rgba(224,92,42,0.3);
+}
+.ctrl.lg:hover {
+  background: #c94e22; border-color: #c94e22; color: white;
+  transform: scale(1.04);
+  box-shadow: 0 6px 28px rgba(224,92,42,0.4);
+}
+
+.skip-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.skip-lbl { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); }
+
+/* Volume + speed */
+.bottom-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px 20px; background: white; gap: 20px;
+}
+.vol-row { display: flex; align-items: center; gap: 8px; flex: 1; }
+.vol-icon { color: var(--muted); flex-shrink: 0; }
+input[type=range] {
+  flex: 1; -webkit-appearance: none; height: 3px;
+  background: var(--warm); border-radius: 3px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px;
+  border-radius: 50%; background: var(--accent2); cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(42,125,224,.2);
+}
+.speed-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.speed-lbl { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+.speed-val {
+  font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+  background: var(--cream); border: 1.5px solid var(--stroke);
+  border-radius: 8px; padding: 4px 10px; cursor: pointer;
+  transition: all 0.15s; color: var(--ink);
+}
+.speed-val:hover { border-color: var(--ink); }
+
+/* Download button */
+.dl-strip {
+  display: none; align-items: center; justify-content: space-between;
+  background: white; border-top: 1px solid var(--stroke);
+  padding: 14px 20px;
+}
+.dl-strip.show { display: flex; }
+.dl-info { font-size: 13px; color: var(--muted); }
+.dl-info strong { color: var(--ink); }
+.dl-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--green); color: white; border: none;
+  border-radius: 9px; padding: 10px 18px;
+  font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 13px;
+  cursor: pointer; text-decoration: none;
+  transition: background 0.15s, transform 0.12s;
+}
+.dl-btn:hover { background: #1e8f4f; transform: translateY(-1px); }
+.dl-btn:active { transform: scale(0.97); }
+
+/* ── History list ───────────────────────────────────────────── */
+.history-section { margin-top: 10px; }
+.history-head {
+  font-size: 11px; font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+.history-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; background: white;
+  border: 1px solid var(--stroke); border-radius: 10px;
+  margin-bottom: 8px; cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.history-item:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+.hist-thumb {
+  width: 48px; height: 36px; object-fit: cover;
+  border-radius: 6px; background: var(--cream); flex-shrink: 0;
+}
+.hist-title {
+  font-size: 13px; font-weight: 500; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hist-fmt {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--muted); flex-shrink: 0;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+footer {
+  margin-top: auto; border-top: 1px solid var(--stroke);
+  padding: 16px 20px; font-size: 11px; color: var(--muted);
+  font-family: 'DM Mono', monospace; text-align: center;
+  letter-spacing: 0.05em;
+}
+
+/* ── Keyboard hint ──────────────────────────────────────────── */
+.kbd { display: inline-block; background: var(--cream); border: 1px solid var(--stroke); border-radius: 4px; padding: 1px 6px; font-family: 'DM Mono', monospace; font-size: 10px; }
+.hint-row { text-align: center; padding: 6px 20px 14px; background: white; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- Nav -->
+  <nav>
+    <div class="brand">S<em>o</em>niq</div>
+    <span class="badge">AUDIO EXTRACTOR</span>
+  </nav>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Extract <em>audio</em><br/>from YouTube.</h1>
+    <p>Paste any YouTube link. We'll download the video on the server, strip the audio track with ffmpeg, and stream it right back to you.</p>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card input-card">
+    <div class="input-label">YouTube URL</div>
+    <div class="url-row">
+      <input class="url-input" id="urlInput" type="text"
+        placeholder="https://youtube.com/watch?v=… or youtu.be/…" autocomplete="off"/>
+      <button class="extract-btn" id="extractBtn" onclick="startExtract()">Extract</button>
+    </div>
+    <div class="format-row">
+      <span class="format-label">Format:</span>
+      <button class="fmt-pill active" data-fmt="mp3" onclick="setFmt(this)">MP3</button>
+      <button class="fmt-pill" data-fmt="m4a" onclick="setFmt(this)">M4A</button>
+      <button class="fmt-pill" data-fmt="wav" onclick="setFmt(this)">WAV</button>
+      <button class="fmt-pill" data-fmt="opus" onclick="setFmt(this)">OPUS</button>
+    </div>
+    <div class="error-bar" id="errorBar">
+      <svg class="error-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span id="errorText"></span>
+    </div>
+  </div>
+
+  <!-- Progress Card -->
+  <div class="card progress-card" id="progressCard">
+    <div class="spinner"></div>
+    <div class="progress-info">
+      <div class="progress-title" id="progressTitle">Connecting to YouTube…</div>
+      <div class="progress-sub" id="progressSub">This may take 20–60 seconds</div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill" style="width:30%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Player Card -->
+  <div class="card player-card" id="playerCard">
+    <!-- Thumbnail -->
+    <div class="thumb-strip">
+      <img class="thumb-img" id="thumbImg" src="" alt=""/>
+      <div class="thumb-grad"></div>
+      <div class="thumb-meta">
+        <div class="track-title" id="trackTitle">—</div>
+        <div class="track-channel" id="trackChannel"></div>
+      </div>
+    </div>
+
+    <!-- Waveform canvas -->
+    <div class="waveform-wrap">
+      <canvas id="waveCanvas" width="640" height="52"></canvas>
+    </div>
+
+    <!-- Seek -->
+    <div class="seek-wrap">
+      <div class="seek-track" id="seekTrack" onclick="seekClick(event)">
+        <div class="seek-fill" id="seekFill"></div>
+        <div class="seek-knob" id="seekKnob"></div>
+      </div>
+      <div class="time-row">
+        <span id="tNow">0:00</span>
+        <span id="tTot">0:00</span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="skip-group">
+        <button class="ctrl xs" onclick="skip(-30)" title="−30s">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.31"/></svg>
+        </button>
+        <span class="skip-lbl">30s</span>
+      </div>
+      <div class="skip-group">
+        <button class="ctrl sm" onclick="skip(-10)" title="−10s">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.31"/></svg>
+        </button>
+        <span class="skip-lbl">10s</span>
+      </div>
+
+      <button class="ctrl lg" id="playBtn" onclick="togglePlay()">
+        <svg id="iPlay" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        <svg id="iPause" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </button>
+
+      <div class="skip-group">
+        <button class="ctrl sm" onclick="skip(10)" title="+10s">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-.49-3.31"/></svg>
+        </button>
+        <span class="skip-lbl">10s</span>
+      </div>
+      <div class="skip-group">
+        <button class="ctrl xs" onclick="skip(30)" title="+30s">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-.49-3.31"/></svg>
+        </button>
+        <span class="skip-lbl">30s</span>
+      </div>
+    </div>
+
+    <!-- Volume + Speed -->
+    <div class="bottom-row">
+      <div class="vol-row">
+        <svg class="vol-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
+        <input type="range" id="volSlider" min="0" max="1" step="0.02" value="0.85" oninput="setVol(this.value)"/>
+        <svg class="vol-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </div>
+      <div class="speed-row">
+        <span class="speed-lbl">SPEED</span>
+        <button class="speed-val" id="speedBtn" onclick="cycleSpeed()">1×</button>
+      </div>
+    </div>
+
+    <!-- Keyboard hint -->
+    <div class="hint-row">
+      <span class="kbd">Space</span> play/pause &nbsp;·&nbsp;
+      <span class="kbd">← →</span> ±10s &nbsp;·&nbsp;
+      <span class="kbd">↑ ↓</span> volume
+    </div>
+
+    <!-- Download strip -->
+    <div class="dl-strip" id="dlStrip">
+      <div class="dl-info">Ready to save · <strong id="dlFmt"></strong></div>
+      <a class="dl-btn" id="dlBtn" href="#" download>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </a>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="history-head">Recent extractions</div>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<footer>Soniq — powered by yt-dlp + ffmpeg · audio streams locally</footer>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+let audio = new Audio();
+let currentJobId = null;
+let selectedFmt = 'mp3';
+let speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+let speedIdx = 2;
+let history = [];
+
+// Waveform
+const wc = document.getElementById('waveCanvas');
+const wx = wc.getContext('2d');
+let waveBars = Array.from({length: 72}, () => Math.random() * 0.25 + 0.05);
+let waveTarget = [...waveBars];
+let isPlaying = false;
+
+// ── Format selector ────────────────────────────────────────────
+function setFmt(el) {
+  document.querySelectorAll('.fmt-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  selectedFmt = el.dataset.fmt;
+}
+
+// ── Extract ────────────────────────────────────────────────────
+async function startExtract() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) return;
+
+  hideError();
+  showProgress('Sending request to backend…', 'Fetching video info from YouTube');
+
+  document.getElementById('extractBtn').disabled = true;
+  document.getElementById('playerCard').classList.remove('show');
+  document.getElementById('dlStrip').classList.remove('show');
+
+  let jobId;
+  try {
+    const res = await fetch('/api/extract', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ url, format: selectedFmt })
+    });
+    const data = await res.json();
+    if (!res.ok) { showError(data.error || 'Server error.'); return; }
+    jobId = data.job_id;
+    currentJobId = jobId;
+  } catch(e) {
+    showError('Cannot reach backend. Make sure server.py is running on port 5000.');
+    return;
+  }
+
+  // Poll status
+  pollStatus(jobId);
+}
+
+let pollTimer = null;
+function pollStatus(jobId) {
+  if (pollTimer) clearTimeout(pollTimer);
+
+  fetch(`/api/status/${jobId}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'queued' || data.status === 'downloading') {
+        showProgress('Downloading & extracting audio…', 'Using yt-dlp + ffmpeg on the server');
+        pollTimer = setTimeout(() => pollStatus(jobId), 1500);
+      } else if (data.status === 'done') {
+        hideProgress();
+        document.getElementById('extractBtn').disabled = false;
+        onExtractionDone(jobId, data);
+      } else if (data.status === 'error') {
+        hideProgress();
+        document.getElementById('extractBtn').disabled = false;
+        showError(data.error || 'Extraction failed.');
+      } else {
+        pollTimer = setTimeout(() => pollStatus(jobId), 1500);
+      }
+    })
+    .catch(() => {
+      pollTimer = setTimeout(() => pollStatus(jobId), 2000);
+    });
+}
+
+function onExtractionDone(jobId, data) {
+  const streamUrl = `/api/stream/${jobId}`;
+  const dlUrl = `/api/download/${jobId}`;
+
+  // Update thumbnail
+  const img = document.getElementById('thumbImg');
+  if (data.thumbnail) {
+    img.src = data.thumbnail;
+    img.onload = () => img.classList.add('loaded');
+  }
+  document.getElementById('trackTitle').textContent = data.title || 'Unknown Title';
+  document.getElementById('trackChannel').textContent = data.channel || '';
+
+  // Load audio
+  audio.pause();
+  audio = new Audio(streamUrl);
+  audio.volume = parseFloat(document.getElementById('volSlider').value);
+  audio.playbackRate = speeds[speedIdx];
+  audio.addEventListener('timeupdate', onTimeUpdate);
+  audio.addEventListener('ended', onEnded);
+  audio.play().catch(() => {});
+  isPlaying = true;
+  showPauseIcon();
+
+  // Download link
+  document.getElementById('dlBtn').href = dlUrl;
+  document.getElementById('dlFmt').textContent = selectedFmt.toUpperCase();
+  document.getElementById('dlStrip').classList.add('show');
+
+  // Show player
+  document.getElementById('playerCard').classList.add('show');
+
+  // History
+  addHistory({ jobId, title: data.title, thumbnail: data.thumbnail, fmt: selectedFmt });
+}
+
+// ── Playback ───────────────────────────────────────────────────
+function togglePlay() {
+  if (audio.paused) { audio.play(); isPlaying = true; showPauseIcon(); }
+  else { audio.pause(); isPlaying = false; showPlayIcon(); }
+}
+function showPlayIcon()  { document.getElementById('iPlay').style.display=''; document.getElementById('iPause').style.display='none'; }
+function showPauseIcon() { document.getElementById('iPlay').style.display='none'; document.getElementById('iPause').style.display=''; }
+
+function skip(s) { audio.currentTime = Math.max(0, audio.currentTime + s); }
+function setVol(v) { audio.volume = parseFloat(v); }
+
+let speedLabels = ['0.5×','0.75×','1×','1.25×','1.5×','2×'];
+function cycleSpeed() {
+  speedIdx = (speedIdx + 1) % speeds.length;
+  audio.playbackRate = speeds[speedIdx];
+  document.getElementById('speedBtn').textContent = speedLabels[speedIdx];
+}
+
+function onTimeUpdate() {
+  const cur = audio.currentTime, dur = audio.duration || 1;
+  const pct = Math.min((cur / dur) * 100, 100);
+  document.getElementById('seekFill').style.width = pct + '%';
+  document.getElementById('seekKnob').style.left = pct + '%';
+  document.getElementById('tNow').textContent = fmt(cur);
+  document.getElementById('tTot').textContent = fmt(audio.duration);
+}
+function onEnded() { isPlaying = false; showPlayIcon(); }
+
+function fmt(s) {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return `${m}:${ss.toString().padStart(2,'0')}`;
+}
+
+function seekClick(e) {
+  const r = e.currentTarget.getBoundingClientRect();
+  const ratio = (e.clientX - r.left) / r.width;
+  if (audio.duration) audio.currentTime = ratio * audio.duration;
+}
+
+// ── Waveform ───────────────────────────────────────────────────
+function drawWave() {
+  const W = wc.width, H = wc.height;
+  wx.clearRect(0, 0, W, H);
+  const n = waveBars.length, bw = W / n, gap = 2;
+  for (let i = 0; i < n; i++) {
+    const t = isPlaying ? (Math.random() * 0.8 + 0.15) : 0.07;
+    waveTarget[i] = t;
+    waveBars[i] += (waveTarget[i] - waveBars[i]) * (isPlaying ? 0.2 : 0.04);
+    const bh = Math.max(2, waveBars[i] * H);
+    const x = i * bw + gap / 2, y = (H - bh) / 2;
+    const g = wx.createLinearGradient(0, y, 0, y + bh);
+    g.addColorStop(0, 'rgba(42,125,224,0.85)');
+    g.addColorStop(1, 'rgba(224,92,42,0.75)');
+    wx.fillStyle = g;
+    wx.beginPath();
+    if (wx.roundRect) wx.roundRect(x, y, bw - gap, bh, 2);
+    else wx.rect(x, y, bw - gap, bh);
+    wx.fill();
+  }
+  requestAnimationFrame(drawWave);
+}
+drawWave();
+
+// ── UI helpers ─────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('errorText').textContent = msg;
+  document.getElementById('errorBar').classList.add('show');
+  hideProgress();
+  document.getElementById('extractBtn').disabled = false;
+}
+function hideError() { document.getElementById('errorBar').classList.remove('show'); }
+
+function showProgress(title, sub) {
+  document.getElementById('progressTitle').textContent = title;
+  document.getElementById('progressSub').textContent = sub;
+  document.getElementById('progressCard').classList.add('show');
+}
+function hideProgress() { document.getElementById('progressCard').classList.remove('show'); }
+
+// ── History ────────────────────────────────────────────────────
+function addHistory(item) {
+  history.unshift(item);
+  if (history.length > 5) history.pop();
+  renderHistory();
+}
+function renderHistory() {
+  const sec = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  if (!history.length) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  list.innerHTML = history.map(h => `
+    <div class="history-item" onclick="reloadJob('${h.jobId}', '${h.fmt}')">
+      <img class="hist-thumb" src="${h.thumbnail||''}" onerror="this.style.display='none'" alt=""/>
+      <span class="hist-title">${h.title || 'Unknown'}</span>
+      <span class="hist-fmt">${h.fmt.toUpperCase()}</span>
+    </div>
+  `).join('');
+}
+function reloadJob(jobId, fmt) {
+  const streamUrl = `/api/stream/${jobId}`;
+  audio.pause();
+  audio = new Audio(streamUrl);
+  audio.volume = parseFloat(document.getElementById('volSlider').value);
+  audio.playbackRate = speeds[speedIdx];
+  audio.addEventListener('timeupdate', onTimeUpdate);
+  audio.addEventListener('ended', onEnded);
+  audio.play().catch(() => {});
+  isPlaying = true;
+  showPauseIcon();
+  document.getElementById('playerCard').classList.add('show');
+}
+
+// ── Keyboard ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (document.activeElement.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowLeft')  skip(-10);
+  if (e.code === 'ArrowRight') skip(10);
+  if (e.code === 'ArrowUp')   { const v = document.getElementById('volSlider'); v.value = Math.min(1, parseFloat(v.value)+0.1); setVol(v.value); }
+  if (e.code === 'ArrowDown') { const v = document.getElementById('volSlider'); v.value = Math.max(0, parseFloat(v.value)-0.1); setVol(v.value); }
+});
+</script>
+</body>
+</html>
