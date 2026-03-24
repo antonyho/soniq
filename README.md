@@ -8,7 +8,7 @@ Works with **GitHub Actions** and **Codeberg / Gitea Actions**.
 ## Repository structure
 
 ```
-ytaudio/
+soniq/
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml        # GitHub Actions pipeline
@@ -32,10 +32,10 @@ ytaudio/
 ## CI/CD pipeline
 
 Every push and pull request runs **lint + unit tests**.  
-Pushes to `main` additionally **build the Docker image**, push it to Container Registry, deploy to Cloud Run, and run a live health check.
+Pushes to `master` additionally **build the Docker image**, push it to Container Registry, deploy to Cloud Run, and run a live health check.
 
 ```
-push to main
+push to master
    │
    ├─► lint (flake8) + unit tests (pytest)
    │         │ pass
@@ -71,7 +71,7 @@ gcloud services enable \
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
 
-gcloud iam service-accounts create ytaudio-cicd \
+gcloud iam service-accounts create soniq-cicd \
   --display-name "YT Audio CI/CD deployer"
 
 # Grant required roles
@@ -80,7 +80,7 @@ for ROLE in \
   roles/storage.admin \
   roles/iam.serviceAccountUser; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member "serviceAccount:ytaudio-cicd@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --member "serviceAccount:soniq-cicd@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role "$ROLE"
 done
 ```
@@ -113,7 +113,7 @@ gcloud iam workload-identity-pools providers create-oidc "github-provider" \
 # Bind your repo to the service account
 # Replace YOUR_GITHUB_USERNAME/YOUR_REPO_NAME
 gcloud iam service-accounts add-iam-policy-binding \
-  "ytaudio-cicd@${PROJECT_ID}.iam.gserviceaccount.com" \
+  "soniq-cicd@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/${POOL}/attribute.repository/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME"
 
@@ -131,13 +131,13 @@ gcloud iam workload-identity-pools providers describe "github-provider" \
 | `GCP_PROJECT_ID` | your GCP project ID |
 | `GCP_REGION` | e.g. `us-central1` |
 | `GCP_WIF_PROVIDER` | WIF provider resource name (from above) |
-| `GCP_SERVICE_ACCOUNT` | `ytaudio-cicd@YOUR_PROJECT.iam.gserviceaccount.com` |
+| `GCP_SERVICE_ACCOUNT` | `soniq-cicd@YOUR_PROJECT.iam.gserviceaccount.com` |
 
 ### Option B — Service Account JSON key (simpler)
 
 ```bash
 gcloud iam service-accounts keys create sa-key.json \
-  --iam-account "ytaudio-cicd@${PROJECT_ID}.iam.gserviceaccount.com"
+  --iam-account "soniq-cicd@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
 Add the contents of `sa-key.json` as secret `GCP_SA_KEY`.  
@@ -222,7 +222,7 @@ python server.py                  # http://localhost:5000
 
 ## Making a release
 
-Just push to `main` — the pipeline handles everything:
+Just push to `master` — the pipeline handles everything:
 1. Tests pass
 2. Docker image built with the commit SHA as tag
 3. Deployed to Cloud Run

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-YT Audio Extractor — Cloud Run backend
+Soniq — YT Audio Extractor — Cloud Run backend
 - Uses /tmp for ephemeral audio storage (Cloud Run gives 512 MB in-memory tmpfs)
 - Optional: set GCS_BUCKET env var to persist files to Google Cloud Storage
 - Designed for gunicorn multi-threaded workers
@@ -27,7 +27,7 @@ CORS(app)
 # ── Storage ────────────────────────────────────────────────────
 # Cloud Run: /tmp is an in-memory tmpfs (up to 512 MB by default).
 # For larger files or persistence, set GCS_BUCKET to auto-upload to GCS.
-DOWNLOAD_DIR = Path(os.environ.get("DOWNLOAD_DIR", "/tmp/ytaudio"))
+DOWNLOAD_DIR = Path(os.environ.get("DOWNLOAD_DIR", "/tmp/soniq"))
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 GCS_BUCKET = os.environ.get("GCS_BUCKET", "")  # optional
@@ -134,7 +134,7 @@ def run_extraction(job_id: str, video_id: str, fmt: str):
         # Optional GCS upload
         gcs_uri = ""
         if GCS_BUCKET:
-            gcs_uri = upload_to_gcs(filepath, f"ytaudio/{filename}")
+            gcs_uri = upload_to_gcs(filepath, f"soniq/{filename}")
 
         update_job(
             job_id,
